@@ -5,6 +5,7 @@ import { LoadingState } from './components/ui/DataState'
 import { useAuth } from './hooks/useAuth'
 import BookmarksPage from './pages/BookmarksPage'
 import DashboardPage from './pages/DashboardPage'
+import DuesPage from './pages/DuesPage'
 import ExpensesPage from './pages/ExpensesPage'
 import HabitsPage from './pages/HabitsPage'
 import NotesPage from './pages/NotesPage'
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="/planner" element={<PlannerPage />} />
           <Route path="/study" element={<StudyPage />} />
           <Route path="/expenses" element={<ExpensesPage />} />
+          <Route path="/dues" element={<DuesPage />} />
           <Route path="/notes" element={<NotesPage />} />
           <Route path="/bookmarks" element={<BookmarksPage />} />
           <Route path="/settings" element={<SettingsPage />} />

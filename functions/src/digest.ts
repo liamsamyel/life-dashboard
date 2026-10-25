@@ -1,6 +1,6 @@
 /**
- * Deadline digest: which academic items belong in today's email, and what
- * that email says.
+ * Daily reminder digest: which Planner deadlines and unpaid bills belong in
+ * today's email, and what that email says.
  *
  * Deliberately dependency-free (no Firebase, no nodemailer) so the logic can
  * be unit-tested by the root Vitest suite — `src` and `functions` share the
@@ -34,10 +34,48 @@ export interface DigestEntry {
 export interface DigestGroup {
   dueSoon: DigestEntry[]
   overdue: DigestEntry[]
+  billsDueSoon?: BillDigestEntry[]
+  billsOverdue?: BillDigestEntry[]
+}
+
+export interface BillDigestEntry {
+  title: string
+  amount: number
+  dueDate: string
+  daysUntil: number
+}
+
+export interface BillSourceItem {
+  title: string
+  amount: number
+  dueDate: string | null
+  paid: boolean
 }
 
 /** Keep the email readable even if a lot is late. */
 const MAX_PER_SECTION = 10
+
+export function selectBills(items: BillSourceItem[], todayISO: string, leadDays: number): {
+  billsDueSoon: BillDigestEntry[]
+  billsOverdue: BillDigestEntry[]
+} {
+  const billsDueSoon: BillDigestEntry[] = []
+  const billsOverdue: BillDigestEntry[] = []
+  for (const item of items) {
+    if (item.paid || !item.dueDate || !Number.isFinite(item.amount) || item.amount <= 0) continue
+    const daysUntil = daysBetweenISO(todayISO, item.dueDate)
+    if (daysUntil > leadDays) continue
+    const entry = { title: item.title, amount: item.amount, dueDate: item.dueDate, daysUntil }
+    if (daysUntil < 0) billsOverdue.push(entry)
+    else billsDueSoon.push(entry)
+  }
+  const byDueDate = (a: BillDigestEntry, b: BillDigestEntry): number =>
+    a.dueDate.localeCompare(b.dueDate) || a.title.localeCompare(b.title)
+  return {
+    billsDueSoon: billsDueSoon.sort(byDueDate).slice(0, MAX_PER_SECTION),
+    billsOverdue: billsOverdue.sort(byDueDate).slice(0, MAX_PER_SECTION),
+  }
+}
 
 const KIND_LABELS: Record<DigestKind, string> = {
   assignment: 'Assignment',
@@ -173,19 +211,23 @@ export function renderDigest(
   group: DigestGroup,
   options: DigestRenderOptions,
 ): DigestMessage | null {
-  const total = group.dueSoon.length + group.overdue.length
+  const billsDueSoon = group.billsDueSoon ?? []
+  const billsOverdue = group.billsOverdue ?? []
+  const total = group.dueSoon.length + group.overdue.length + billsDueSoon.length + billsOverdue.length
   if (total === 0) return null
 
   const leadLabel = `${options.leadDays} ${options.leadDays === 1 ? 'day' : 'days'}`
   const subjectParts: string[] = []
   if (group.dueSoon.length > 0) subjectParts.push(`${group.dueSoon.length} due soon`)
   if (group.overdue.length > 0) subjectParts.push(`${group.overdue.length} overdue`)
+  if (billsDueSoon.length > 0) subjectParts.push(`${billsDueSoon.length} bill${billsDueSoon.length === 1 ? '' : 's'} due`)
+  if (billsOverdue.length > 0) subjectParts.push(`${billsOverdue.length} bill${billsOverdue.length === 1 ? '' : 's'} overdue`)
   const subject = `LifeOS — ${subjectParts.join(' · ')}`
 
   const textLines: string[] = [
     `Hi ${options.name},`,
     '',
-    `Here is your academic planner for ${formatDisplayDate(options.todayISO)}.`,
+    `Here are your Planner deadlines and bill reminders for ${formatDisplayDate(options.todayISO)}.`,
   ]
   if (group.dueSoon.length > 0) {
     textLines.push('', `Due in the next ${leadLabel}:`)
@@ -194,6 +236,16 @@ export function renderDigest(
   if (group.overdue.length > 0) {
     textLines.push('', 'Overdue and still open:')
     for (const entry of group.overdue) textLines.push(`• ${entryLine(entry)}`)
+  }
+  const billLine = (entry: BillDigestEntry): string =>
+    `${entry.title} — PHP ${entry.amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, ${formatDisplayDate(entry.dueDate)} · ${relativeLabel(entry.daysUntil)}`
+  if (billsDueSoon.length > 0) {
+    textLines.push('', `Bills due in the next ${leadLabel}:`)
+    for (const entry of billsDueSoon) textLines.push(`• ${billLine(entry)}`)
+  }
+  if (billsOverdue.length > 0) {
+    textLines.push('', 'Overdue bills:')
+    for (const entry of billsOverdue) textLines.push(`• ${billLine(entry)}`)
   }
   if (options.appUrl) {
     textLines.push('', `Open your planner: ${options.appUrl}`)
@@ -216,12 +268,22 @@ export function renderDigest(
              .join('')}
          </ul>`
 
+  const billSection = (heading: string, entries: BillDigestEntry[]): string =>
+    entries.length === 0
+      ? ''
+      : `<h2 style="font-size:14px;margin:20px 0 8px;color:#14171a;">${escapeHtml(heading)}</h2>
+         <ul style="margin:0;padding-left:18px;">${entries
+           .map((entry) => `<li style="margin:6px 0;color:#14171a;">${escapeHtml(entry.title)} — PHP ${escapeHtml(entry.amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}, ${escapeHtml(formatDisplayDate(entry.dueDate))} <span style="color:#59616d;">· ${escapeHtml(relativeLabel(entry.daysUntil))}</span></li>`)
+           .join('')}</ul>`
+
   const html = `<div style="font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:1.6;color:#14171a;background:#f5f6f8;padding:24px;">
     <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e0e4ea;border-radius:8px;padding:20px 24px;">
       <p style="margin:0 0 4px;font-size:16px;font-weight:600;">Hi ${escapeHtml(options.name)},</p>
-      <p style="margin:0;color:#59616d;">Your academic planner for ${escapeHtml(formatDisplayDate(options.todayISO))}.</p>
+      <p style="margin:0;color:#59616d;">Your Planner deadlines and bill reminders for ${escapeHtml(formatDisplayDate(options.todayISO))}.</p>
       ${section(`Due in the next ${leadLabel}`, group.dueSoon)}
       ${section('Overdue and still open', group.overdue)}
+      ${billSection(`Bills due in the next ${leadLabel}`, billsDueSoon)}
+      ${billSection('Overdue bills', billsOverdue)}
       ${
         options.appUrl
           ? `<p style="margin:22px 0 0;"><a href="${escapeHtml(options.appUrl)}" style="color:#2563eb;">Open your planner</a></p>`

@@ -389,7 +389,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader
             title="Email reminders"
-            subtitle="A daily digest of academic deadlines, sent by a scheduled function"
+            subtitle="A daily digest of Planner deadlines and unpaid bills, sent by a scheduled function"
           />
           <CardBody>
             <form onSubmit={(event) => void handleNotifySave(event)} className="space-y-4" noValidate>
@@ -417,12 +417,12 @@ export default function SettingsPage() {
                   >
                     {LEAD_DAY_OPTIONS.map((option) => (
                       <option key={option} value={option}>
-                        {option} {option === 1 ? 'day' : 'days'} before the deadline
+                        {option} {option === 1 ? 'day' : 'days'} before the due date
                       </option>
                     ))}
                   </select>
                   <span className="mt-1.5 block text-xs text-ink-muted">
-                    Overdue items are always included.
+                    Overdue deadlines and bills are always included.
                   </span>
                 </label>
               </div>
@@ -436,19 +436,18 @@ export default function SettingsPage() {
                 />
                 <span>
                   <span className="block text-sm text-ink">
-                    Email me about upcoming deadlines
+                    Email me about deadlines and bill dues
                   </span>
                   <span className="mt-0.5 block text-xs leading-relaxed text-ink-muted">
-                    Assignments, exams, and milestones that are due — or already overdue — are
-                    summarized once a day at 08:00 Asia/Manila.
+                    Planner deadlines and unpaid bills due — or already overdue — are summarized
+                    once a day at about 08:07 Asia/Manila.
                   </span>
                 </span>
               </label>
 
               <p className="text-xs leading-relaxed text-ink-muted">
-                The digest is sent by a scheduled Cloud Function, so it arrives even when LifeOS
-                isn’t open. It needs the function deployed with your Gmail app password — see
-                “Deadline email reminders” in the README.
+                The digest runs from GitHub Actions, so it arrives even when LifeOS isn’t open.
+                Add the GitHub Actions secrets and enable the workflow as described in the README.
               </p>
 
               <div className="flex items-center gap-3">

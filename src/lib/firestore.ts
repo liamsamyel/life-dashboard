@@ -11,7 +11,7 @@ import {
   where,
   type Firestore,
 } from 'firebase/firestore'
-import type { DashboardData, MonthlyBudget, Profile } from '../types'
+import type { Bill, DashboardData, MonthlyBudget, Profile } from '../types'
 import { toISODate } from './dates'
 import { dataErrorMessage, errorCodeOf } from './errors'
 import { db } from './firebase'
@@ -38,6 +38,7 @@ export type CollectionKey =
   | 'habitCompletions'
   | 'studySessions'
   | 'transactions'
+  | 'bills'
   | 'budgets'
   | 'notes'
   | 'bookmarks'
@@ -101,6 +102,7 @@ export async function fetchAllUserData(user: {
       habitCompletions,
       studySessions,
       transactions,
+      bills,
       budgets,
       notes,
       bookmarks,
@@ -114,6 +116,7 @@ export async function fetchAllUserData(user: {
       listForUser<DashboardData['habitCompletions'][number]>(database, 'habitCompletions', user.uid),
       listForUser<DashboardData['studySessions'][number]>(database, 'studySessions', user.uid),
       listForUser<DashboardData['transactions'][number]>(database, 'transactions', user.uid),
+      listForUser<Bill>(database, 'bills', user.uid),
       listForUser<MonthlyBudget>(database, 'budgets', user.uid),
       listForUser<DashboardData['notes'][number]>(database, 'notes', user.uid),
       listForUser<DashboardData['bookmarks'][number]>(database, 'bookmarks', user.uid),
@@ -161,6 +164,7 @@ export async function fetchAllUserData(user: {
       habitCompletions,
       studySessions,
       transactions,
+      bills,
       budget,
       notes,
       bookmarks,

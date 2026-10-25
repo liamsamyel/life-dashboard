@@ -1,5 +1,6 @@
 import {
   Bookmark,
+  CalendarClock,
   GraduationCap,
   LayoutDashboard,
   ListChecks,
@@ -27,6 +28,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/planner', label: 'Academic Planner', icon: GraduationCap },
   { to: '/study', label: 'Study Tracker', icon: Timer },
   { to: '/expenses', label: 'Expenses', icon: Wallet },
+  { to: '/dues', label: 'Bills & dues', icon: CalendarClock },
   { to: '/notes', label: 'Notes', icon: StickyNote },
   { to: '/bookmarks', label: 'Bookmarks', icon: Bookmark },
   { to: '/settings', label: 'Settings', icon: Settings },

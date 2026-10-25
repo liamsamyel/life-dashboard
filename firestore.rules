@@ -163,6 +163,26 @@ service cloud.firestore {
       allow delete: if owns();
     }
 
+    // --- Upcoming bills and subscriptions -------------------------------
+    match /bills/{id} {
+      allow read: if owns();
+      allow create: if createsOwn()
+        && nonEmptyString(request.resource.data.title)
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.dueDate is string
+        && request.resource.data.recurrence in ['once', 'monthly']
+        && request.resource.data.paid is bool;
+      allow update: if owns()
+        && keepsOwner()
+        && nonEmptyString(request.resource.data.title)
+        && request.resource.data.amount > 0
+        && request.resource.data.dueDate is string
+        && request.resource.data.recurrence in ['once', 'monthly']
+        && request.resource.data.paid is bool;
+      allow delete: if owns();
+    }
+
     // --- Monthly budgets (deterministic id: `${uid}_${YYYY-MM}`) ----------
     match /budgets/{id} {
       allow read: if owns();

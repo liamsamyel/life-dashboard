@@ -6,6 +6,7 @@ import type {
   MonthlyBudget,
   Note,
   Bookmark,
+  Bill,
   Profile,
   Project,
   StudySession,
@@ -57,10 +58,20 @@ export function buildSampleData(): DashboardData {
     habitCompletions: sampleHabitCompletions(),
     studySessions: sampleStudySessions(),
     transactions: sampleTransactions(),
+    bills: sampleBills(),
     budget: sampleBudget,
     notes: sampleNotes(),
     bookmarks: sampleBookmarks,
   }
+}
+
+function sampleBills(): Bill[] {
+  const today = dayOffset(0)
+  const nextWeek = dayOffset(7)
+  return [
+    { id: 'sample-bill-1', userId: sampleUser, title: 'Mobile plan', amount: 599, dueDate: nextWeek, recurrence: 'monthly', paid: false, createdAt: isoOf(at(-30, 9)), updatedAt: isoOf(at(-30, 9)) },
+    { id: 'sample-bill-2', userId: sampleUser, title: 'Electricity', amount: 1850, dueDate: today, recurrence: 'monthly', paid: false, createdAt: isoOf(at(-30, 9)), updatedAt: isoOf(at(-30, 9)) },
+  ]
 }
 
 const sampleProfile: Profile = {

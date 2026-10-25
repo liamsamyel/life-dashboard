@@ -7,8 +7,8 @@ as a portfolio project.
 **Current status: Stages 1–6 complete** — foundation, design system, dashboard, task manager,
 academic planner, habit tracker, study tracker, expense tracker, notes, bookmarks, and
 Firebase auth + Firestore data access with saved account preferences (profile, theme, time
-zone, date format). Deadline email reminders ship as a scheduled Cloud Function — see
-[Deadline email reminders](#deadline-email-reminders). See [Roadmap](#roadmap).
+zone, date format). Planner and bill email reminders run through GitHub Actions — see
+[Planner and bill email reminders](#planner-and-bill-email-reminders). See [Roadmap](#roadmap).
 
 ## Tech stack
 
@@ -21,7 +21,7 @@ zone, date format). Deadline email reminders ship as a scheduled Cloud Function 
 | Auth       | Firebase Auth (stage 6) + Firestore security rules  |
 | Charts     | Recharts                                            |
 | Icons      | Lucide React                                        |
-| Jobs       | Firebase Cloud Functions (v2, scheduled) + nodemailer (Gmail SMTP) |
+| Jobs       | GitHub Actions schedule + Firebase Admin SDK + nodemailer (Gmail SMTP) |
 | Tests      | Vitest                                              |
 | Versioning | Git + GitHub                                        |
 
@@ -111,6 +111,7 @@ Top-level collections, one user's data per document (all guarded by `userId`):
 | `habitCompletions`| One doc per habit per day — **deterministic id** `${habitId}_${YYYY-MM-DD}` prevents duplicates |
 | `studySessions`   | Timed sessions; the app enforces one live session per user in a transaction |
 | `transactions`    | Income and expenses (PHP, positive `amount` + `type`)                 |
+| `bills`           | Upcoming one-time or monthly dues (`title`, amount, due date, paid state) |
 | `budgets`         | One doc per user per month — deterministic id `${uid}_${YYYY-MM}`     |
 | `notes`           | Titles, content, tags, pinning                                        |
 | `bookmarks`       | URL-validated links with categories                                   |
@@ -132,15 +133,18 @@ indexes here when a query needs server-side ordering.
 ## Project structure
 
 ```
-├── firebase.json              # Firebase CLI config: rules, indexes, functions
+├── firebase.json              # Firebase CLI config: rules and indexes
 ├── .firebaserc                # Default project (dashboard-85f1d)
 ├── firestore.rules            # Authorization: per-user ownership + field validation
 ├── firestore.indexes.json     # Composite indexes (empty by design — see above)
 ├── .env.example               # Public Firebase web config placeholders
-├── functions/                 # Scheduled Cloud Function: daily deadline digest
+├── functions/                 # Daily Planner + bill digest runner
 │   └── src/
-│       ├── index.ts           # sendDeadlineDigest (08:00 Asia/Manila, Gmail SMTP)
+│       ├── index.ts           # GitHub Actions entry point
+│       ├── sendDigest.ts      # Firestore reads + email delivery
 │       └── digest.ts          # Pure selection + email rendering (unit-tested)
+├── .github/workflows/
+│   └── daily-email-reminders.yml # Daily run at 08:07 Asia/Manila
 ├── README.md
 └── src/
     ├── components/
@@ -252,18 +256,20 @@ All three read through [`src/hooks/useCollection.ts`](src/hooks/useCollection.ts
 share streaming updates, loading/error/retry states, read-only sample mode, and
 `userId`-stamped writes with the earlier features.
 
-## Deadline email reminders
+## Planner and bill email reminders
 
-LifeOS can email a **daily deadline digest** — assignments, exams, and milestones that are
-due inside your lead window, plus anything already overdue. Preferences live in
+LifeOS can email a **daily reminder digest** — Planner assignments, exams, milestones, and
+unpaid bills that are due inside your lead window, plus anything already overdue. Add
+one-time or monthly payments from **Bills & dues**; marking a monthly bill paid advances its
+due date by one month. Preferences live in
 **Settings → Email reminders** (recipient, on/off, and 1/2/3/5/7 days of warning).
 
-A browser can't email you while the app is closed, so the digest is sent by a scheduled
-Cloud Function in [`functions/`](functions/src/index.ts):
+A browser can't email you while the app is closed, so the digest runs from a scheduled
+GitHub Actions workflow at [`.github/workflows/daily-email-reminders.yml`](.github/workflows/daily-email-reminders.yml):
 
-- runs once a day at **08:00 Asia/Manila** (`onSchedule`, so it is a cron job, not an
-  in-browser timer);
-- reads every open `academicItems` document and groups it by `userId`, so one user's email can
+- runs once a day at **08:07 Asia/Manila** (00:07 UTC); GitHub may delay scheduled jobs during
+  high load;
+- reads open `academicItems` and unpaid `bills`, groups both by `userId`, so one user's email can
   never contain another user's records;
 - skips users with reminders off, no email address, or `lastDigestOn` already set to today —
   one digest per user per day even if the schedule retries;
@@ -273,55 +279,43 @@ Cloud Function in [`functions/`](functions/src/index.ts):
 
 ### One-time setup
 
-1. **Enable billing** on the Firebase project (Cloud Functions requires the Blaze plan; the
-   free tier covers 2M invocations/month and 3 scheduled jobs, which is far beyond this).
-2. **Create a Gmail app password:** Google Account → Security → 2-Step Verification →
-   App passwords → generate one for “Mail”. Use the 16-character password, not your login
-   password.
-3. **Install and authenticate the Firebase CLI:**
+1. **Deploy the Firestore rules** from the project root so your account can create and manage
+   bill records. This does not deploy a Cloud Function or require Blaze:
 
    ```bash
-   npm install -g firebase-tools
    firebase login
-   npm install --prefix functions
+   firebase use dashboard-85f1d
+   firebase deploy --only firestore:rules
    ```
 
-4. **Store the credentials as secrets** (never in `.env` or the repo):
+2. **Create a dedicated Google Cloud service account** for the digest in project
+   `dashboard-85f1d` from the [Service Accounts page](https://console.cloud.google.com/iam-admin/serviceaccounts?project=dashboard-85f1d).
+   Grant it the **Cloud Datastore User** role (`roles/datastore.user`), which lets the job read
+   and update Firestore documents. Create a JSON key and keep the downloaded file private;
+   never commit it to the repository.
+3. **Create a Gmail app password:** open [Google Account security](https://myaccount.google.com/security),
+   enable 2-Step Verification, then open App passwords and generate one for “Mail”. Use the
+   generated password, not your normal sign-in password.
+4. In the repository's [Actions secrets settings](https://github.com/liamsamyel/life-dashboard/settings/secrets/actions), add these repository
+   secrets:
 
-   ```bash
-   firebase functions:secrets:set GMAIL_USER          # you@gmail.com
-   firebase functions:secrets:set GMAIL_APP_PASSWORD  # the 16-character app password
-   ```
+   | Secret | Value |
+   | --- | --- |
+   | `FIREBASE_SERVICE_ACCOUNT_JSON` | Entire contents of the service-account JSON key file |
+   | `GMAIL_USER` | Gmail address that sends the digest |
+   | `GMAIL_APP_PASSWORD` | The generated app password |
 
-5. **Deploy** the rules, indexes, and the function:
+   Optionally add an `APP_URL` repository variable with the URL to your planner page.
+5. **Commit and push the workflow to the repository's default branch.** In GitHub, open
+   **Actions → Daily email reminders → Run workflow** to trigger a first run. Check that run's
+   log for `Deadline digest complete`. Scheduled runs then happen daily at 08:07 Manila time.
+6. In LifeOS, sign in, add bills under **Bills & dues**, and enable **Settings → Email reminders**.
 
-   ```bash
-   firebase deploy --only firestore:rules,firestore:indexes
-   firebase deploy --only functions
-   ```
-
-   Deploying the rules from this repo matters: the bookmarks write path only works when the
-   published rules match [`firestore.rules`](firestore.rules).
-
-6. **Send a test digest** without waiting for 08:00:
-
-   ```bash
-   firebase functions:shell
-   > sendDeadlineDigest()
-   ```
-
-   The function logs `Deadline digest complete` with how many emails were sent and skipped.
-
-### Optional: link back to the planner
-
-Add `APP_URL` to `functions/.env` (git-ignored) and redeploy to include a planner link in the
-email:
-
-```
-APP_URL=https://your-deployed-lifeos.example.com/planner
-```
-
-`.env` holds configuration only — never the Gmail password, which belongs in secrets.
+The job uses a service-account key because it runs outside Google Cloud. Keep that key only in
+GitHub's encrypted Actions secrets and rotate or revoke it if it is ever exposed. The old
+Vercel cron has been removed from this repository. If it or the old Firebase scheduled
+function is already live, disable it before turning on the GitHub schedule to prevent duplicate
+emails.
 
 ## Testing
 
@@ -366,7 +360,7 @@ Component and workflow tests (including auth flows) are added in stage 7.
 | 6     | Firebase Auth, rules-backed data access, profile & preferences    | ✅ Done |
 | 7     | Automated tests, bug fixes, responsive polish                      | ⬜ Next |
 | 8     | Deployment and portfolio presentation (screenshots, write-up)      | ⬜      |
-| Extra | Deadline email reminders (scheduled Cloud Function + Gmail SMTP)    | ✅ Done |
+| Extra | Planner and bill email reminders (GitHub Actions + Gmail SMTP) | ✅ Done |
 
 ## Deployment (stage 8)
 

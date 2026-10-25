@@ -26,15 +26,30 @@ export type HabitFrequency = 'daily' | 'weekly'
 export type StudySessionStatus = 'running' | 'paused' | 'completed' | 'cancelled'
 
 export type TransactionType = 'income' | 'expense'
+export type BillRecurrence = 'once' | 'monthly'
+
+export interface Bill {
+  id: string
+  userId: string
+  title: string
+  amount: number
+  dueDate: string
+  recurrence: BillRecurrence
+  /** Original day of the month, retained when short months clamp the due date. */
+  billingDay?: number
+  paid: boolean
+  createdAt: string
+  updatedAt: string
+}
 
 export interface Profile {
   id: string
   displayName: string
-  /** Recipient for the deadline digest email (defaults to the sign-in email). */
+  /** Recipient for the daily Planner and bill reminder digest. */
   email: string
-  /** Whether the daily deadline digest email is enabled. */
+  /** Whether daily Planner and bill reminders are enabled. */
   notifyEmail: boolean
-  /** Days before a deadline to include it in the digest (1–14). */
+  /** Days before a deadline or bill due date to include it in the digest (1–14). */
   deadlineLeadDays: number
   theme: ThemeSetting
   timeZone: string
@@ -192,6 +207,7 @@ export interface DashboardData {
   habitCompletions: HabitCompletion[]
   studySessions: StudySession[]
   transactions: Transaction[]
+  bills: Bill[]
   budget: MonthlyBudget
   notes: Note[]
   bookmarks: Bookmark[]
