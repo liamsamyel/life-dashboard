@@ -89,33 +89,35 @@ export default function AppShell() {
       </header>
 
       {/* Mobile drawer */}
-      {menuOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div
-            className="absolute inset-0 bg-black/60"
+      <div
+        className={`fixed inset-0 z-50 transition-[visibility] duration-200 lg:hidden ${menuOpen ? 'visible pointer-events-auto' : 'invisible pointer-events-none'}`}
+        aria-hidden={!menuOpen}
+        inert={!menuOpen}
+      >
+        <div
+          className={`absolute inset-0 bg-black/60 transition-opacity duration-200 ease-out ${menuOpen ? 'opacity-100' : 'opacity-0'}`}
+          onClick={() => setMenuOpen(false)}
+          aria-hidden="true"
+        />
+        <div
+          id="mobile-navigation"
+          role="dialog"
+          aria-modal={menuOpen || undefined}
+          aria-label="Navigation menu"
+          className={`absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col border-r border-line bg-surface transition-transform duration-200 ease-out ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        >
+          <button
+            ref={closeButtonRef}
+            type="button"
             onClick={() => setMenuOpen(false)}
-            aria-hidden="true"
-          />
-          <div
-            id="mobile-navigation"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Navigation menu"
-            className="absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col border-r border-line bg-surface"
+            aria-label="Close navigation menu"
+            className="absolute right-2 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-md text-ink-muted transition-colors duration-150 hover:bg-surface-2 hover:text-ink"
           >
-            <button
-              ref={closeButtonRef}
-              type="button"
-              onClick={() => setMenuOpen(false)}
-              aria-label="Close navigation menu"
-              className="absolute right-2 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-md text-ink-muted transition-colors duration-150 hover:bg-surface-2 hover:text-ink"
-            >
-              <X className="h-5 w-5" aria-hidden="true" />
-            </button>
-            <Sidebar onNavigate={() => setMenuOpen(false)} />
-          </div>
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <Sidebar onNavigate={() => setMenuOpen(false)} />
         </div>
-      ) : null}
+      </div>
 
       <div className="lg:pl-60">
         <main id="main-content" className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
