@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { isFirebaseConfigured } from '../lib/firebase'
-import { signIn, signUp, useAuth } from '../hooks/useAuth'
+import { sendPasswordReset, signIn, signUp, useAuth } from '../hooks/useAuth'
 import { Button } from '../components/ui/Button'
 import { Card, CardBody, CardHeader } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -25,6 +25,7 @@ export default function SignInPage() {
   const [password, setPassword] = useState('')
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
+  const [resetSent, setResetSent] = useState(false)
   const [busy, setBusy] = useState(false)
 
   // Already signed in (or just completed sign-in) → into the app.
@@ -54,12 +55,14 @@ export default function SignInPage() {
     setMode(next)
     setFieldError(null)
     setFormError(null)
+    setResetSent(false)
   }
 
   async function handleSubmit(event: FormEvent): Promise<void> {
     event.preventDefault()
     setFormError(null)
     setFieldError(null)
+    setResetSent(false)
 
     const trimmedEmail = email.trim()
 
@@ -81,6 +84,27 @@ export default function SignInPage() {
         await signUp(trimmedEmail, password, displayName.trim())
       }
       // The auth listener flips status to signedIn; the effect above routes home.
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Something went wrong. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleForgotPassword(): Promise<void> {
+    setFormError(null)
+    setFieldError(null)
+    setResetSent(false)
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail) {
+      setFormError('Enter your email address above first.')
+      return
+    }
+
+    setBusy(true)
+    try {
+      await sendPasswordReset(trimmedEmail)
+      setResetSent(true)
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Something went wrong. Please try again.')
     } finally {
@@ -124,11 +148,27 @@ export default function SignInPage() {
                 label="Email"
                 type="email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  setResetSent(false)
+                }}
                 autoComplete="email"
                 placeholder="you@example.com"
                 required
               />
+
+              {isSignIn ? (
+                <div className="-mt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={busy}
+                    className="text-sm font-medium text-accent hover:underline disabled:opacity-50"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              ) : null}
 
               <Input
                 label="Password"
@@ -146,6 +186,12 @@ export default function SignInPage() {
               {formError ? (
                 <p role="alert" className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
                   {formError}
+                </p>
+              ) : null}
+
+              {resetSent ? (
+                <p role="status" className="rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink-muted">
+                  If an account exists for that email, a password reset link has been sent. Check your inbox and spam folder.
                 </p>
               ) : null}
 

@@ -1,6 +1,7 @@
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendPasswordResetEmail as firebaseSendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   updateProfile,
@@ -70,6 +71,19 @@ export async function signIn(email: string, password: string): Promise<void> {
   try {
     await signInWithEmailAndPassword(client, email, password)
   } catch (error) {
+    throw new Error(authErrorMessage(errorCodeOf(error)))
+  }
+}
+
+/** Send a password reset email without revealing whether the email is registered. */
+export async function sendPasswordReset(email: string): Promise<void> {
+  const client = requireAuth()
+  try {
+    await firebaseSendPasswordResetEmail(client, email)
+  } catch (error) {
+    // Keep the response generic even when Firebase email-enumeration protection
+    // is disabled and it reports that no account exists for this address.
+    if (errorCodeOf(error) === 'auth/user-not-found') return
     throw new Error(authErrorMessage(errorCodeOf(error)))
   }
 }
