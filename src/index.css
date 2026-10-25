@@ -73,6 +73,15 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /* iOS Safari zooms the page when a focused form control uses text under 16px. */
+  @media (max-width: 767px) {
+    input:not([type='checkbox']):not([type='radio']):not([type='range']),
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+
   /* One visible focus treatment everywhere. */
   :focus-visible {
     outline: 2px solid var(--accent);

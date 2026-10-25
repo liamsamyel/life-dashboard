@@ -50,7 +50,7 @@ export default function AppShell() {
   }, [menuOpen])
 
   return (
-    <div className="min-h-screen bg-canvas">
+    <div className="min-h-[100svh] bg-canvas">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-60 focus:rounded-md focus:border focus:border-line focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:text-ink"
