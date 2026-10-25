@@ -1,0 +1,209 @@
+rules_version = '2';
+
+// LifeOS Firestore security rules
+// ================================
+// This is the authorization layer (the Firestore equivalent of SQL RLS):
+// every document carries a `userId`, and each rule only lets the signed-in
+// user read or write their own. Queries must filter by `userId`, otherwise
+// Firestore rejects them outright — the frontend cannot bypass these checks.
+//
+// Apply with: firebase deploy --only firestore:rules
+// The app never ships admin/service credentials; the web SDK only ever
+// attempts what these rules allow.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Existing document belongs to the current user.
+    function owns() {
+      return signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // New/edited document is written as the current user and keeps its owner.
+    function createsOwn() {
+      return signedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    function keepsOwner() {
+      return request.resource.data.userId == resource.data.userId;
+    }
+
+    function isValidPriority() {
+      return request.resource.data.priority in ['low', 'medium', 'high'];
+    }
+
+    function nonEmptyString(value) {
+      return value is string && value.size() > 0 && value.size() <= 5000;
+    }
+
+    // --- Profile (keyed by uid, created automatically on sign-up) ---------
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.id == uid
+        && request.resource.data.theme in ['dark', 'light', 'system'];
+      allow delete: if false;
+    }
+
+    // --- Subjects ----------------------------------------------------------
+    match /subjects/{id} {
+      allow read: if owns();
+      allow create: if createsOwn() && nonEmptyString(request.resource.data.name);
+      allow update: if owns() && keepsOwner() && nonEmptyString(request.resource.data.name);
+      allow delete: if owns();
+    }
+
+    // --- Projects ----------------------------------------------------------
+    match /projects/{id} {
+      allow read: if owns();
+      allow create: if createsOwn()
+        && nonEmptyString(request.resource.data.name)
+        && request.resource.data.status in ['planned', 'active', 'completed', 'archived']
+        && isValidPriority();
+      allow update: if owns()
+        && keepsOwner()
+        && request.resource.data.status in ['planned', 'active', 'completed', 'archived']
+        && isValidPriority();
+      allow delete: if owns();
+    }
+
+    // --- Academic items (assignments, exams, milestones) -------------------
+    match /academicItems/{id} {
+      allow read: if owns();
+      allow create: if createsOwn()
+        && nonEmptyString(request.resource.data.title)
+        && request.resource.data.kind in ['assignment', 'exam', 'milestone']
+        && request.resource.data.status in ['not_started', 'in_progress', 'completed']
+        && request.resource.data.progress is number
+        && request.resource.data.progress >= 0
+        && request.resource.data.progress <= 100
+        && isValidPriority();
+      allow update: if owns()
+        && keepsOwner()
+        && request.resource.data.status in ['not_started', 'in_progress', 'completed']
+        && request.resource.data.progress >= 0
+        && request.resource.data.progress <= 100
+        && isValidPriority();
+      allow delete: if owns();
+    }
+
+    // --- Tasks -------------------------------------------------------------
+    match /tasks/{id} {
+      allow read: if owns();
+      allow create: if createsOwn()
+        && nonEmptyString(request.resource.data.title)
+        && request.resource.data.status in ['pending', 'completed']
+        && isValidPriority();
+      allow update: if owns()
+        && keepsOwner()
+        && nonEmptyString(request.resource.data.title)
+        && request.resource.data.status in ['pending', 'completed']
+        && isValidPriority();
+      allow delete: if owns();
+    }
+
+    // --- Habits ------------------------------------------------------------
+    match /habits/{id} {
+      allow read: if owns();
+      allow create: if createsOwn()
+        && nonEmptyString(request.resource.data.name)
+        && request.resource.data.frequency in ['daily', 'weekly'];
+      allow update: if owns()
+        && keepsOwner()
+        && request.resource.data.frequency in ['daily', 'weekly'];
+      allow delete: if owns();
+    }
+
+    // --- Habit completions -------------------------------------------------
+    // Uniqueness (one completion per habit per day) is enforced by the app
+    // using a deterministic document id: `${habitId}_${YYYY-MM-DD}` — Firestore
+    // has no UNIQUE constraint, so same-id writes converge instead of stacking.
+    match /habitCompletions/{id} {
+      allow read: if owns();
+      allow create: if createsOwn()
+        && request.resource.data.habitId is string
+        && request.resource.data.completedOn is string;
+      allow delete: if owns();
+      allow update: if false;
+    }
+
+    // --- Study sessions ----------------------------------------------------
+    // "At most one running session per user" cannot be expressed as a rule
+    // (rules cannot query); the app enforces it with a read-then-write check
+    // in a transaction — see stage 4.
+    match /studySessions/{id} {
+      allow read: if owns();
+      allow create: if createsOwn()
+        && request.resource.data.status in ['running', 'paused', 'completed', 'cancelled']
+        && request.resource.data.durationSeconds is number
+        && request.resource.data.durationSeconds >= 0;
+      allow update: if owns()
+        && keepsOwner()
+        && request.resource.data.status in ['running', 'paused', 'completed', 'cancelled'];
+      allow delete: if owns();
+    }
+
+    // --- Transactions (income/expenses) ------------------------------------
+    match /transactions/{id} {
+      allow read: if owns();
+      allow create: if createsOwn()
+        && request.resource.data.type in ['income', 'expense']
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.transactionOn is string;
+      allow update: if owns()
+        && keepsOwner()
+        && request.resource.data.type in ['income', 'expense']
+        && request.resource.data.amount > 0;
+      allow delete: if owns();
+    }
+
+    // --- Monthly budgets (deterministic id: `${uid}_${YYYY-MM}`) ----------
+    match /budgets/{id} {
+      allow read: if owns();
+      allow create: if createsOwn()
+        && request.resource.data.month is string
+        && request.resource.data.amount is number
+        && request.resource.data.amount >= 0;
+      allow update: if owns() && keepsOwner() && request.resource.data.amount >= 0;
+      allow delete: if owns();
+    }
+
+    // --- Notes -------------------------------------------------------------
+    match /notes/{id} {
+      allow read: if owns();
+      allow create: if createsOwn() && nonEmptyString(request.resource.data.title);
+      allow update: if owns()
+        && keepsOwner()
+        && nonEmptyString(request.resource.data.title)
+        && request.resource.data.pinned is bool;
+      allow delete: if owns();
+    }
+
+    // --- Bookmarks ---------------------------------------------------------
+    match /bookmarks/{id} {
+      allow read: if owns();
+      allow create: if createsOwn()
+        && nonEmptyString(request.resource.data.title)
+        && request.resource.data.url is string
+        && (request.resource.data.url.startsWith('https://')
+            || request.resource.data.url.startsWith('http://'));
+      allow update: if owns()
+        && keepsOwner()
+        && (request.resource.data.url.startsWith('https://')
+            || request.resource.data.url.startsWith('http://'));
+      allow delete: if owns();
+    }
+
+    // Anything not matched above (e.g. stored config, other collections)
+    // is denied by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
