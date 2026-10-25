@@ -1,5 +1,5 @@
 import { CalendarClock, Check, CircleAlert, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card, CardBody, CardHeader } from '../components/ui/Card'
@@ -34,6 +34,7 @@ export default function DuesPage() {
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [submitBusy, setSubmitBusy] = useState(false)
+  const closeDialog = useCallback(() => setOpen(false), [])
   const dateFormat = profile?.dateFormat ?? 'YYYY-MM-DD'
   const today = todayISO()
   const bills = useMemo(() => [...dues.rows].sort((a, b) => a.dueDate.localeCompare(b.dueDate)), [dues.rows])
@@ -105,7 +106,7 @@ export default function DuesPage() {
         </ul>}
       </CardBody>
     </Card>}
-    <Dialog open={open} onClose={() => setOpen(false)} busy={submitBusy} title={editing ? 'Edit bill' : 'Add a bill'} description="Unpaid bills due within your reminder window, plus overdue bills, will appear in your daily email." footer={<><Button variant="secondary" onClick={() => setOpen(false)} disabled={submitBusy}>Cancel</Button><Button type="submit" form="bill-form" variant="primary" disabled={submitBusy}>{submitBusy ? 'Saving…' : 'Save bill'}</Button></>}>
+    <Dialog open={open} onClose={closeDialog} busy={submitBusy} title={editing ? 'Edit bill' : 'Add a bill'} description="Unpaid bills due within your reminder window, plus overdue bills, will appear in your daily email." footer={<><Button variant="secondary" onClick={closeDialog} disabled={submitBusy}>Cancel</Button><Button type="submit" form="bill-form" variant="primary" disabled={submitBusy}>{submitBusy ? 'Saving…' : 'Save bill'}</Button></>}>
       <form id="bill-form" onSubmit={(event) => void submit(event)} className="space-y-4" noValidate>
         <Input label="Bill or subscription" value={form.title} maxLength={120} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="e.g. Internet" required autoFocus />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><Input label="Amount (PHP)" type="number" min="0.01" step="0.01" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} placeholder="0.00" required /><Input label="Next due date" type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })} required /></div>

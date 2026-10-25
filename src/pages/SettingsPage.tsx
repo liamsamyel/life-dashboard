@@ -389,7 +389,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader
             title="Email reminders"
-            subtitle="A daily digest of Planner deadlines and unpaid bills, sent by a scheduled function"
+            subtitle="A daily digest of Planner deadlines and unpaid bills, sent by GitHub Actions"
           />
           <CardBody>
             <form onSubmit={(event) => void handleNotifySave(event)} className="space-y-4" noValidate>
