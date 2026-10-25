@@ -39,6 +39,12 @@ function RequireAuth({ children }: { children: ReactNode }) {
     return <Navigate to="/signin" replace />
   }
 
+  // In production, never expose the sample-data experience when Firebase is
+  // missing or misconfigured. Keep it available for local development.
+  if (status === 'unconfigured' && import.meta.env.PROD) {
+    return <Navigate to="/signin" replace />
+  }
+
   // 'unconfigured' → local development on sample data.
   // 'signedIn'     → the app.
   return children

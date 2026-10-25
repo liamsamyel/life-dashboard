@@ -38,8 +38,12 @@ export default function SignInPage() {
         <Card className="w-full max-w-xl">
           <EmptyState
             icon={KeyRound}
-            title="Firebase isn’t configured yet"
-            description="Copy .env.example to .env, paste your web app config from the Firebase console (Project settings → Your apps → Web app), and restart the dev server. Until then the app runs on sample data."
+            title="Sign-in isn’t configured yet"
+            description={
+              import.meta.env.PROD
+                ? 'Add the Firebase web app settings as repository Actions variables, then run the GitHub Pages deployment again.'
+                : 'Copy .env.example to .env, add your Firebase web app settings, and restart the dev server. Local development uses sample data until Firebase is configured.'
+            }
           />
         </Card>
       </div>
