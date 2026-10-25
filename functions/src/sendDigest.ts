@@ -83,10 +83,27 @@ export async function sendDailyDigest(
   let sent = 0
   let skipped = 0
   let failed = 0
+  let remindersOff = 0
+  let missingEmail = 0
+  let alreadySent = 0
+  let noMatchingItems = 0
+  let matchingDeadlines = 0
+  let matchingBills = 0
   for (const userDoc of usersSnapshot.docs) {
     const profile = userDoc.data() as ProfileData
     const email = asString(profile.email).trim()
-    if (profile.notifyEmail === false || !email || asString(profile.lastDigestOn) === todayISO) {
+    if (profile.notifyEmail === false) {
+      remindersOff += 1
+      skipped += 1
+      continue
+    }
+    if (!email) {
+      missingEmail += 1
+      skipped += 1
+      continue
+    }
+    if (asString(profile.lastDigestOn) === todayISO) {
+      alreadySent += 1
       skipped += 1
       continue
     }
@@ -94,6 +111,8 @@ export async function sendDailyDigest(
     const leadDays = asLeadDays(profile.deadlineLeadDays)
     const deadlines = selectDeadlines(itemsByUser.get(userDoc.id) ?? [], todayISO, leadDays, subjectNames)
     const bills = selectBills(billsByUser.get(userDoc.id) ?? [], todayISO, leadDays)
+    matchingDeadlines += deadlines.dueSoon.length + deadlines.overdue.length
+    matchingBills += bills.billsDueSoon.length + bills.billsOverdue.length
     const message = renderDigest({ ...deadlines, ...bills }, {
       name: asString(profile.displayName).trim().split(' ')[0] || 'there',
       todayISO,
@@ -101,6 +120,7 @@ export async function sendDailyDigest(
       appUrl: options.appUrl,
     })
     if (!message) {
+      noMatchingItems += 1
       skipped += 1
       continue
     }
@@ -119,6 +139,13 @@ export async function sendDailyDigest(
   }
 
   transport.close()
-  console.info('Deadline digest complete', { todayISO, sent, skipped })
+  console.info('Deadline digest complete', {
+    todayISO,
+    sent,
+    skipped,
+    recordsRead: { profiles: usersSnapshot.size, openPlannerItems: itemsSnapshot.size, bills: billsSnapshot.size },
+    matchingItems: { deadlines: matchingDeadlines, bills: matchingBills },
+    skippedReasons: { remindersOff, missingEmail, alreadySent, noMatchingItems },
+  })
   if (failed > 0) throw new Error(`Deadline digest could not be sent to ${failed} user(s). See the preceding error details.`)
 }
