@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
+  base: '/life-dashboard/',
   plugins: [react(), tailwindcss()],
   test: {
     environment: 'node',
